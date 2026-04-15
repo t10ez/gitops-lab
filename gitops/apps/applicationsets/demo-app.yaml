@@ -1,7 +1,7 @@
-                           apiVersion: argoproj.io/v1alpha1
+apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: demo-app-nonprod
+  name: demo-app
   namespace: argocd
 spec:
   generators:
@@ -9,9 +9,13 @@ spec:
         elements:
           - env: dev
             namespace: demo-dev
+            autoSync: true
           - env: staging
             namespace: demo-staging
-
+            autoSync: true
+          - env: prod
+            namespace: demo-prod
+            autoSync: false
   template:
     metadata:
       name: "demo-app-{{env}}"
@@ -32,45 +36,6 @@ spec:
         automated:
           prune: true
           selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
-          - ServerSideApply=true
-        retry:
-          limit: 3
-          backoff:
-            duration: 5s
-            factor: 2
-            maxDuration: 1m
----
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: demo-app-prod
-  namespace: argocd
-spec:
-  generators:
-    - list:
-        elements:
-          - env: prod
-            namespace: demo-prod
-
-  template:
-    metadata:
-      name: "demo-app-{{env}}"
-    spec:
-      project: lab
-      source:
-        repoURL: https://github.com/t10ez/gitops-lab
-        targetRevision: main
-        path: gitops/charts/demo-app
-        helm:
-          valueFiles:
-            - values.yaml
-            - "../../environments/{{env}}/values.yaml"
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: "{{namespace}}"
-      syncPolicy:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
