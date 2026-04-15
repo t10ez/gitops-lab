@@ -4,21 +4,26 @@ metadata:
   name: demo-app
   namespace: argocd
 spec:
+  goTemplate: true # ← เปิด Go template engine
+  goTemplateOptions:
+    - missingkey=error
+
   generators:
     - list:
         elements:
           - env: dev
             namespace: demo-dev
-            autoSync: true
+            autoSync: true # ← boolean จริงๆ
           - env: staging
             namespace: demo-staging
             autoSync: true
           - env: prod
             namespace: demo-prod
             autoSync: false
+
   template:
     metadata:
-      name: "demo-app-{{env}}"
+      name: "demo-app-{{.env}}" # ← Go template ใช้ {{.field}}
     spec:
       project: lab
       source:
@@ -28,14 +33,14 @@ spec:
         helm:
           valueFiles:
             - values.yaml
-            - "../../environments/{{env}}/values.yaml"
+            - "../../environments/{{.env}}/values.yaml"
       destination:
         server: https://kubernetes.default.svc
-        namespace: "{{namespace}}"
+        namespace: "{{.namespace}}"
       syncPolicy:
         automated:
-          prune: {{autoSync}}
-          selfHeal: {{autoSync}}
+          prune: { { .autoSync } } # ← boolean ถูกต้อง
+          selfHeal: { { .autoSync } }
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
