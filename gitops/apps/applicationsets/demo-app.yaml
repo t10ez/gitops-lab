@@ -1,29 +1,20 @@
-apiVersion: argoproj.io/v1alpha1
+                           apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: demo-app
+  name: demo-app-nonprod
   namespace: argocd
 spec:
-  goTemplate: true # ← เปิด Go template engine
-  goTemplateOptions:
-    - missingkey=error
-
   generators:
     - list:
         elements:
           - env: dev
             namespace: demo-dev
-            autoSync: true # ← boolean จริงๆ
           - env: staging
             namespace: demo-staging
-            autoSync: true
-          - env: prod
-            namespace: demo-prod
-            autoSync: false
 
   template:
     metadata:
-      name: "demo-app-{{.env}}" # ← Go template ใช้ {{.field}}
+      name: "demo-app-{{env}}"
     spec:
       project: lab
       source:
@@ -33,16 +24,53 @@ spec:
         helm:
           valueFiles:
             - values.yaml
-            - "../../environments/{{.env}}/values.yaml"
+            - "../../environments/{{env}}/values.yaml"
       destination:
         server: https://kubernetes.default.svc
-        namespace: "{{.namespace}}"
+        namespace: "{{namespace}}"
       syncPolicy:
-        {{- if .autoSync}}
         automated:
           prune: true
           selfHeal: true
-        {{- end}}
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 1m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: demo-app-prod
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: prod
+            namespace: demo-prod
+
+  template:
+    metadata:
+      name: "demo-app-{{env}}"
+    spec:
+      project: lab
+      source:
+        repoURL: https://github.com/t10ez/gitops-lab
+        targetRevision: main
+        path: gitops/charts/demo-app
+        helm:
+          valueFiles:
+            - values.yaml
+            - "../../environments/{{env}}/values.yaml"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
