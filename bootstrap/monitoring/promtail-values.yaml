@@ -1,0 +1,13 @@
+# promtail-values.yaml
+# Promtail — ส่ง log จากทุก pod ไป Loki
+config:
+  clients:
+    - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

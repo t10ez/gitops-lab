@@ -1,0 +1,53 @@
+# traefik-values.yaml
+deployment:
+  replicas: 1
+
+service:
+  type: NodePort
+
+ports:
+  web:
+    port: 80
+    nodePort: 30080
+    expose:
+      default: true
+  websecure:
+    port: 443
+    nodePort: 30443
+    expose:
+      default: true
+  traefik:
+    port: 9000
+    nodePort: 30900
+    expose:
+      default: true
+
+ingressRoute:
+  dashboard:
+    enabled: true
+    matchRule: Host(`traefik.localhost`)
+    entryPoints: ["web"]
+
+providers:
+  kubernetesIngress:
+    enabled: true
+  kubernetesCRD:
+    enabled: true
+
+metrics:
+  prometheus:
+    enabled: true
+
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi

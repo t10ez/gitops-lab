@@ -1,0 +1,39 @@
+# argocd-values.yaml
+global:
+  domain: argocd.localhost
+
+configs:
+  params:
+    server.insecure: true
+  cm:
+    timeout.reconciliation: 30s
+    application.resourceTrackingMethod: annotation
+    # enable exec ใน UI สำหรับ lab
+    exec.enabled: "true"
+  rbac:
+    policy.default: role:admin
+
+server:
+  replicas: 1
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: argocd.localhost
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+
+repoServer:
+  replicas: 1
+
+applicationSet:
+  replicas: 1
+
+redis-ha:
+  enabled: false
+
+redis:
+  enabled: true
+
+notifications:
+  enabled: true
+  # ยังไม่ config Slack ใน lab

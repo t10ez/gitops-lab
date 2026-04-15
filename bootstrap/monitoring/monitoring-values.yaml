@@ -1,0 +1,86 @@
+# monitoring-values.yaml
+grafana:
+  enabled: true
+  adminPassword: "admin"
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.localhost
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+
+  # datasource Loki auto-config
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-gateway.monitoring.svc.cluster.local
+      access: proxy
+      isDefault: false
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      argocd:
+        gnetId: 14584
+        revision: 1
+        datasource: Prometheus
+      traefik:
+        gnetId: 17346
+        revision: 9
+        datasource: Prometheus
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+    # scrape Traefik
+    additionalScrapeConfigs:
+      - job_name: traefik
+        static_configs:
+          - targets:
+              - traefik.traefik.svc.cluster.local:9100
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
