@@ -9,13 +9,13 @@ spec:
         elements:
           - env: dev
             namespace: demo-dev
-            autoSync: "true"
+            autoSync: true
           - env: staging
             namespace: demo-staging
-            autoSync: "true"
+            autoSync: true
           - env: prod
             namespace: demo-prod
-            autoSync: "false"
+            autoSync: false
   template:
     metadata:
       name: "demo-app-{{env}}"
