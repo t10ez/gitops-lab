@@ -1,0 +1,20 @@
+# bootstrap/cert-manager/values.yaml
+installCRDs: true          # ติดตั้ง CRDs พร้อมกัน
+
+replicaCount: 1            # lab ใช้ 1 พอ
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# enable prometheus metrics
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    labels:
+      release: monitoring  # ต้อง match กับ kube-prometheus-stack
