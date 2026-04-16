@@ -1,59 +1,67 @@
 global:
+  # TLS is enabled — certs come from cert-manager secret vault-tls
   tlsDisable: false
 
 server:
+  replicas: 3
+
+  # Mount the cert-manager TLS secret into /vault/userconfig/vault-tls/
+  extraVolumes:
+    - type: secret
+      name: vault-tls
+
+  standalone:
+    enabled: false
+
   ha:
     enabled: true
     replicas: 3
+
     raft:
       enabled: true
+      # Sets node_id automatically from the pod's HOSTNAME env var — avoids
+      # Helm misinterpreting {{ env "HOSTNAME" }} as a Go template call.
       setNodeId: true
+
       config: |
         ui = true
 
         listener "tcp" {
-          tls_disable        = 0
-          address            = "[::]:8200"
-          cluster_address    = "[::]:8201"
-          tls_cert_file      = "/vault/userconfig/vault-tls/tls.crt"
-          tls_key_file       = "/vault/userconfig/vault-tls/tls.key"
-          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file   = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file    = "/vault/userconfig/vault-tls/tls.key"
         }
 
         storage "raft" {
           path = "/vault/data"
+          # Each pod tries to join all three peers on startup.
+          # leader_tls_servername must match a SAN in the cert so TLS
+          # verification passes without disabling it cluster-internally.
+          retry_join {
+            leader_api_addr      = "https://vault-0.vault-internal:8200"
+            leader_tls_servername = "vault-0.vault-internal"
+            leader_ca_cert_file  = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr      = "https://vault-1.vault-internal:8200"
+            leader_tls_servername = "vault-1.vault-internal"
+            leader_ca_cert_file  = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr      = "https://vault-2.vault-internal:8200"
+            leader_tls_servername = "vault-2.vault-internal"
+            leader_ca_cert_file  = "/vault/userconfig/vault-tls/ca.crt"
+          }
         }
 
         service_registration "kubernetes" {}
 
-  volumes:
-    - name: vault-tls
-      secret:
-        secretName: vault-tls
-
-  volumeMounts:
-    - name: vault-tls
-      mountPath: /vault/userconfig/vault-tls
-      readOnly: true
-
-  resources:
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 512Mi
-
   dataStorage:
     enabled: true
-    size: 10Gi
-    storageClass: standard
-
-  ingress:
-    enabled: false
+    size: 1Gi
+    storageClass: standard # kind default
 
 ui:
   enabled: true
-
-injector:
-  enabled: false
+  serviceType: ClusterIP
