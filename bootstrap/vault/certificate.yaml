@@ -8,11 +8,25 @@ spec:
   issuerRef:
     name: lab-ca-issuer
     kind: ClusterIssuer
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
   dnsNames:
+    # Regular service (used by clients and UI)
     - vault
     - vault.vault
     - vault.vault.svc
     - vault.vault.svc.cluster.local
-    - vault.localhost
+    # Headless service (used internally by Raft for peer-to-peer)
+    - vault-internal
+    - vault-internal.vault.svc.cluster.local
+    # Per-pod headless DNS — required for retry_join leader_tls_servername
+    - vault-0.vault-internal
+    - vault-1.vault-internal
+    - vault-2.vault-internal
+    - vault-0.vault-internal.vault.svc.cluster.local
+    - vault-1.vault-internal.vault.svc.cluster.local
+    - vault-2.vault-internal.vault.svc.cluster.local
+    # For local port-forward access
+    - localhost
   ipAddresses:
     - 127.0.0.1
