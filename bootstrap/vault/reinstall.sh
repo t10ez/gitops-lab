@@ -35,7 +35,10 @@ pf_stop() {
 wait_vault_api() {
   echo "  waiting for Vault API at $VAULT_ADDR..."
   for i in $(seq 1 30); do
-    vault status 2>/dev/null && return 0 || true
+    # exit 0 = unsealed, exit 2 = sealed-but-responding — both mean API is up
+    # Use ||true pattern to prevent set -e from exiting on non-zero
+    RC=0; vault status 2>/dev/null || RC=$?
+    [ $RC -eq 0 ] || [ $RC -eq 2 ] && return 0
     sleep 2
   done
   echo "ERROR: Vault API did not become available" >&2
@@ -45,23 +48,42 @@ wait_vault_api() {
 unseal_via_exec() {
   local pod=$1
   echo "  unsealing $pod via kubectl exec..."
-  kubectl exec -n "$NAMESPACE" "$pod" -- \
-    env VAULT_SKIP_VERIFY=true vault operator unseal "$K1"
-  kubectl exec -n "$NAMESPACE" "$pod" -- \
-    env VAULT_SKIP_VERIFY=true vault operator unseal "$K2"
-  kubectl exec -n "$NAMESPACE" "$pod" -- \
-    env VAULT_SKIP_VERIFY=true vault operator unseal "$K3"
+  for key in "$K1" "$K2" "$K3"; do
+    # Retry each key — vault-N may still be mid Raft-join and briefly return
+    # "not initialized" before the cluster state replicates from vault-0.
+    for attempt in $(seq 1 15); do
+      OUT=$(kubectl exec -n "$NAMESPACE" "$pod" -- \
+        env VAULT_SKIP_VERIFY=true vault operator unseal "$key" 2>&1) || true
+      if echo "$OUT" | grep -qiE "not initialized|error making|400|500"; then
+        echo "  attempt $attempt: $(echo "$OUT" | grep -i 'error\|not init' | head -1), retrying in 5s..."
+        sleep 5
+      else
+        echo "$OUT"
+        break
+      fi
+    done
+  done
 }
 
 wait_pod_exec_ready() {
   local pod=$1
-  echo "  waiting for $pod to accept exec..."
+  # Step 1: wait for pod phase = Running
+  echo "  waiting for $pod to be Running..."
+  for i in $(seq 1 60); do
+    PHASE=$(kubectl get pod "$pod" -n "$NAMESPACE" \
+      -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    [ "$PHASE" = "Running" ] && break
+    echo "  $pod phase=${PHASE:-unknown} ($i/60)..."
+    sleep 5
+  done
+  # Step 2: wait for exec to respond
+  echo "  waiting for $pod vault API via exec..."
   for i in $(seq 1 30); do
-    if kubectl exec -n "$NAMESPACE" "$pod" -- \
-        env VAULT_SKIP_VERIFY=true vault status 2>/dev/null \
-        | grep -q "Initialized"; then
-      return 0
-    fi
+    # Capture output separately — pipefail would treat kubectl's exit 2 (sealed)
+    # as a failure even when grep matches, so we avoid a direct pipe here.
+    STATUS=$(kubectl exec -n "$NAMESPACE" "$pod" -- \
+      env VAULT_SKIP_VERIFY=true vault status 2>/dev/null) || true
+    echo "$STATUS" | grep -q "Initialized" && return 0
     sleep 4
   done
   echo "ERROR: $pod did not become exec-ready in time" >&2
