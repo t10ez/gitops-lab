@@ -1,40 +1,55 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Unseal all 3 Vault pods using keys from vault-keys.json.
+# Run after any cluster restart or pod eviction.
+set -euo pipefail
 
-KEYS_FILE="$(dirname "$0")/vault-keys.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE=vault
+KEYS_FILE="$SCRIPT_DIR/vault-keys.json"
 
 if [ ! -f "$KEYS_FILE" ]; then
-  echo "ERROR: vault-keys.json not found"
+  echo "ERROR: $KEYS_FILE not found — run reinstall.sh first" >&2
   exit 1
 fi
 
-echo "=== Unsealing Vault pods ==="
+K1=$(jq -r '.unseal_keys_b64[0]' "$KEYS_FILE")
+K2=$(jq -r '.unseal_keys_b64[1]' "$KEYS_FILE")
+K3=$(jq -r '.unseal_keys_b64[2]' "$KEYS_FILE")
 
-for pod in vault-0 vault-1 vault-2; do
-  echo "Checking $pod..."
+unseal_pod() {
+  local pod=$1
 
-  kubectl wait pod $pod -n vault \
-    --for=condition=Ready \
-    --timeout=60s 2>/dev/null || continue
+  echo "==> $pod: checking seal status..."
+  STATUS=$(kubectl exec -n "$NAMESPACE" "$pod" -- \
+    env VAULT_SKIP_VERIFY=true vault status 2>/dev/null) || true
 
-  SEALED=$(kubectl exec $pod -n vault -- \
-    vault status -format=json 2>/dev/null \
-    | jq -r '.sealed' 2>/dev/null || echo "true")
-
-  if [ "$SEALED" = "false" ]; then
-    echo "$pod: already unsealed"
-    continue
+  if echo "$STATUS" | grep -q "Sealed.*false"; then
+    echo "    already unsealed, skipping."
+    return 0
   fi
 
-  echo "$pod: unsealing..."
-  for i in 0 1 2; do
-    KEY=$(jq -r ".unseal_keys_b64[$i]" "$KEYS_FILE")
-    kubectl exec $pod -n vault -- \
-      vault operator unseal "$KEY" >/dev/null
+  echo "    sealed — unsealing with 3 keys..."
+  for key in "$K1" "$K2" "$K3"; do
+    for attempt in $(seq 1 10); do
+      OUT=$(kubectl exec -n "$NAMESPACE" "$pod" -- \
+        env VAULT_SKIP_VERIFY=true vault operator unseal "$key" 2>&1) || true
+      if echo "$OUT" | grep -qiE "not initialized|error making|400|500"; then
+        echo "    attempt $attempt: $(echo "$OUT" | grep -i 'error\|not init' | head -1), retrying in 5s..."
+        sleep 5
+      else
+        echo "$OUT" | grep -E "Sealed|Progress" || true
+        break
+      fi
+    done
   done
-  echo "$pod: unsealed"
+
+  echo "    done."
+}
+
+for pod in vault-0 vault-1 vault-2; do
+  unseal_pod "$pod"
 done
 
 echo ""
-echo "=== Vault Status ==="
-kubectl get pods -n vault
+echo "==> Pod status:"
+kubectl get pods -n "$NAMESPACE"
