@@ -19,13 +19,10 @@ spec:
     # Headless service (used internally by Raft for peer-to-peer)
     - vault-internal
     - vault-internal.vault.svc.cluster.local
-    # Per-pod headless DNS — required for retry_join leader_tls_servername
-    - vault-0.vault-internal
-    - vault-1.vault-internal
-    - vault-2.vault-internal
-    - vault-0.vault-internal.vault.svc.cluster.local
-    - vault-1.vault-internal.vault.svc.cluster.local
-    - vault-2.vault-internal.vault.svc.cluster.local
+    # Per-pod headless DNS — wildcard covers any replica count
+    # (vault-0, vault-1, vault-2, vault-3, ... ไม่ต้องแก้เมื่อ scale)
+    - "*.vault-internal"
+    - "*.vault-internal.vault.svc.cluster.local"
     # For local port-forward access
     - localhost
   ipAddresses:
