@@ -1,2 +1,5 @@
 *secret*
 vault-keys.json
+
+# ESO manifest templates are safe to commit (no real credentials)
+!bootstrap/eso/*.yaml
