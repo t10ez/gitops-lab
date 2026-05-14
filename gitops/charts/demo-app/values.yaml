@@ -1,7 +1,8 @@
 replicaCount: 1
 image:
   repository: nginx
-  tag: alpine
+  tag: latest
+  pullPolicy: IfNotPresent
 service:
   port: 80
 ingress:
